@@ -1,6 +1,6 @@
 streamlit
 folium
-streamlit-foliu
+streamlit-folium
 pandas
 plotly
 numpy
