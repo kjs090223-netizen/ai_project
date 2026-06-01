@@ -8,42 +8,39 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 서울시 연령대별 인구 분석")
+st.title("📊 서울 행정구별 연령대 인구 분석")
 
-uploaded_file = st.file_uploader(
-    "population.csv 파일을 업로드하세요",
-    type=["csv"]
-)
+# GitHub Raw URL
+RAW_URL = "https://raw.githubusercontent.com/사용자이름/저장소명/main/population.csv"
 
-if uploaded_file is not None:
+@st.cache_data
+def load_data():
+    return pd.read_csv(RAW_URL)
 
-    df = pd.read_csv(uploaded_file)
+try:
+    df = load_data()
 
     region_col = df.columns[0]
 
     regions = df[region_col].tolist()
 
     selected_region = st.selectbox(
-        "행정구를 선택하세요",
+        "🏙️ 행정구 선택",
         regions
     )
 
     row = df[df[region_col] == selected_region].iloc[0]
 
-    age_columns = [
-        col for col in df.columns
-        if col != region_col
-    ]
+    age_columns = df.columns[1:]
+    populations = row[age_columns]
 
-    populations = row[age_columns].values
+    fig, ax = plt.subplots(figsize=(12, 6))
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    # 연한 회색 배경
+    fig.patch.set_facecolor("#f0f0f0")
+    ax.set_facecolor("#f0f0f0")
 
-    # 배경색
-    fig.patch.set_facecolor("#f2f2f2")
-    ax.set_facecolor("#f2f2f2")
-
-    # 꺾은선 그래프
+    # 빨간색 꺾은선
     ax.plot(
         age_columns,
         populations,
@@ -54,7 +51,7 @@ if uploaded_file is not None:
 
     ax.set_title(
         f"{selected_region} 연령대별 인구",
-        fontsize=16,
+        fontsize=18,
         fontweight="bold"
     )
 
@@ -62,7 +59,6 @@ if uploaded_file is not None:
     ax.set_ylabel("인구수")
 
     ax.grid(
-        True,
         linestyle="--",
         alpha=0.5
     )
@@ -71,10 +67,11 @@ if uploaded_file is not None:
 
     st.pyplot(fig)
 
-    st.subheader("📋 선택한 지역 데이터")
+    st.subheader("📋 연령대별 인구")
+
     result_df = pd.DataFrame({
         "나이대": age_columns,
-        "인구수": populations
+        "인구수": populations.values
     })
 
     st.dataframe(
@@ -82,5 +79,5 @@ if uploaded_file is not None:
         use_container_width=True
     )
 
-else:
-    st.info("population.csv 파일을 업로드해주세요.")
+except Exception as e:
+    st.error(f"데이터를 불러올 수 없습니다.\n\n{e}")
