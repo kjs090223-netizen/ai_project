@@ -8,45 +8,85 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 서울 행정구별 연령대 인구 분석")
+# =========================
+# GitHub RAW 주소 입력
+# =========================
+RAW_URL = "여기에_GitHub_RAW_URL_입력"
 
-# GitHub Raw URL
-RAW_URL = "https://raw.githubusercontent.com/사용자이름/저장소명/main/population.csv"
-
+# =========================
+# 데이터 불러오기
+# =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv(RAW_URL)
+
+    encodings = [
+        "utf-8",
+        "utf-8-sig",
+        "cp949",
+        "euc-kr"
+    ]
+
+    for enc in encodings:
+        try:
+            return pd.read_csv(RAW_URL, encoding=enc)
+        except:
+            continue
+
+    raise Exception(
+        "CSV 파일 인코딩을 읽을 수 없습니다."
+    )
 
 try:
+
     df = load_data()
 
+    st.title("📊 행정구별 연령대 인구 분석")
+
+    # 첫 번째 열 = 행정구
     region_col = df.columns[0]
 
-    regions = df[region_col].tolist()
+    regions = df[region_col].unique()
 
     selected_region = st.selectbox(
         "🏙️ 행정구 선택",
         regions
     )
 
-    row = df[df[region_col] == selected_region].iloc[0]
+    selected_row = df[
+        df[region_col] == selected_region
+    ].iloc[0]
 
-    age_columns = df.columns[1:]
-    populations = row[age_columns]
+    age_columns = list(df.columns[1:])
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    populations = []
+
+    for col in age_columns:
+        value = str(selected_row[col]).replace(",", "")
+        populations.append(float(value))
+
+    # =========================
+    # 그래프
+    # =========================
+
+    plt.rcParams["font.family"] = "DejaVu Sans"
+    plt.rcParams["axes.unicode_minus"] = False
+
+    fig, ax = plt.subplots(
+        figsize=(12, 6)
+    )
 
     # 연한 회색 배경
-    fig.patch.set_facecolor("#f0f0f0")
-    ax.set_facecolor("#f0f0f0")
+    fig.patch.set_facecolor("#f2f2f2")
+    ax.set_facecolor("#f2f2f2")
 
     # 빨간색 꺾은선
     ax.plot(
         age_columns,
         populations,
         color="red",
+        linewidth=3,
         marker="o",
-        linewidth=3
+        markersize=8
     )
 
     ax.set_title(
@@ -67,11 +107,15 @@ try:
 
     st.pyplot(fig)
 
+    # =========================
+    # 데이터 테이블
+    # =========================
+
     st.subheader("📋 연령대별 인구")
 
     result_df = pd.DataFrame({
         "나이대": age_columns,
-        "인구수": populations.values
+        "인구수": populations
     })
 
     st.dataframe(
@@ -80,4 +124,6 @@ try:
     )
 
 except Exception as e:
-    st.error(f"데이터를 불러올 수 없습니다.\n\n{e}")
+
+    st.error("데이터를 불러올 수 없습니다.")
+    st.code(str(e))
