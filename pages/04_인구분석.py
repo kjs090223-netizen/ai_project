@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="서울 인구 분석",
@@ -8,33 +8,21 @@ st.set_page_config(
     layout="wide"
 )
 
-# =========================
-# GitHub RAW 주소 입력
-# =========================
-RAW_URL = "여기에_GitHub_RAW_URL_입력"
+# GitHub RAW URL 입력
+RAW_URL = "https://raw.githubusercontent.com/사용자명/저장소명/main/population.csv"
 
-# =========================
-# 데이터 불러오기
-# =========================
 @st.cache_data
 def load_data():
 
-    encodings = [
-        "utf-8",
-        "utf-8-sig",
-        "cp949",
-        "euc-kr"
-    ]
+    encodings = ["utf-8", "utf-8-sig", "cp949", "euc-kr"]
 
     for enc in encodings:
         try:
             return pd.read_csv(RAW_URL, encoding=enc)
         except:
-            continue
+            pass
 
-    raise Exception(
-        "CSV 파일 인코딩을 읽을 수 없습니다."
-    )
+    raise Exception("CSV 파일을 읽을 수 없습니다.")
 
 try:
 
@@ -42,88 +30,63 @@ try:
 
     st.title("📊 행정구별 연령대 인구 분석")
 
-    # 첫 번째 열 = 행정구
+    st.write("데이터 미리보기")
+    st.dataframe(df.head())
+
     region_col = df.columns[0]
 
-    regions = df[region_col].unique()
-
     selected_region = st.selectbox(
-        "🏙️ 행정구 선택",
-        regions
+        "행정구 선택",
+        df[region_col].unique()
     )
 
-    selected_row = df[
-        df[region_col] == selected_region
-    ].iloc[0]
+    row = df[df[region_col] == selected_region].iloc[0]
 
-    age_columns = list(df.columns[1:])
+    # 숫자형 연령 컬럼만 추출
+    age_cols = []
+
+    for col in df.columns[1:]:
+        if "세" in str(col) or "이상" in str(col):
+            age_cols.append(col)
 
     populations = []
 
-    for col in age_columns:
-        value = str(selected_row[col]).replace(",", "")
-        populations.append(float(value))
+    for col in age_cols:
+        value = str(row[col]).replace(",", "")
+        populations.append(int(float(value)))
 
-    # =========================
-    # 그래프
-    # =========================
+    fig = go.Figure()
 
-    plt.rcParams["font.family"] = "DejaVu Sans"
-    plt.rcParams["axes.unicode_minus"] = False
-
-    fig, ax = plt.subplots(
-        figsize=(12, 6)
+    fig.add_trace(
+        go.Scatter(
+            x=age_cols,
+            y=populations,
+            mode="lines+markers",
+            line=dict(
+                color="red",
+                width=4
+            ),
+            marker=dict(
+                size=8
+            )
+        )
     )
 
-    # 연한 회색 배경
-    fig.patch.set_facecolor("#f2f2f2")
-    ax.set_facecolor("#f2f2f2")
-
-    # 빨간색 꺾은선
-    ax.plot(
-        age_columns,
-        populations,
-        color="red",
-        linewidth=3,
-        marker="o",
-        markersize=8
+    fig.update_layout(
+        title=f"{selected_region} 연령대별 인구",
+        xaxis_title="나이",
+        yaxis_title="인구수",
+        plot_bgcolor="#f0f0f0",
+        paper_bgcolor="#f0f0f0",
+        height=600
     )
 
-    ax.set_title(
-        f"{selected_region} 연령대별 인구",
-        fontsize=18,
-        fontweight="bold"
-    )
-
-    ax.set_xlabel("나이")
-    ax.set_ylabel("인구수")
-
-    ax.grid(
-        linestyle="--",
-        alpha=0.5
-    )
-
-    plt.xticks(rotation=45)
-
-    st.pyplot(fig)
-
-    # =========================
-    # 데이터 테이블
-    # =========================
-
-    st.subheader("📋 연령대별 인구")
-
-    result_df = pd.DataFrame({
-        "나이대": age_columns,
-        "인구수": populations
-    })
-
-    st.dataframe(
-        result_df,
+    st.plotly_chart(
+        fig,
         use_container_width=True
     )
 
 except Exception as e:
 
-    st.error("데이터를 불러올 수 없습니다.")
+    st.error("오류 발생")
     st.code(str(e))
