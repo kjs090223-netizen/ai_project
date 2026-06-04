@@ -2,96 +2,118 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-# 페이지 설정
 st.set_page_config(
     page_title="서울 기온 분석",
     page_icon="🌡️",
     layout="wide"
 )
 
-st.title("🌡️ 서울 기온 데이터 분석")
-st.write("날짜 범위를 선택하면 최고기온과 최저기온 변화를 확인할 수 있습니다.")
+st.title("🌡️ 서울 기온 분석")
 
-# 데이터 불러오기
 @st.cache_data
 def load_data():
-    df = pd.read_csv("seoul.csv", encoding="cp949")
 
-    # 날짜 변환
-    df["날짜"] = pd.to_datetime(df["날짜"])
+    # utf-8 → cp949 순서로 시도
+    try:
+        df = pd.read_csv("seoul.csv", encoding="utf-8")
+    except:
+        df = pd.read_csv("seoul.csv", encoding="cp949")
 
-    # 결측치 제거
-    df["최고기온(℃)"] = pd.to_numeric(df["최고기온(℃)"], errors="coerce")
-    df["최저기온(℃)"] = pd.to_numeric(df["최저기온(℃)"], errors="coerce")
+    # 컬럼명 공백 제거
+    df.columns = df.columns.str.strip()
 
-    df = df.dropna(subset=["최고기온(℃)", "최저기온(℃)"])
+    # 날짜 변환 (오류 해결)
+    df["날짜"] = pd.to_datetime(
+        df["날짜"],
+        errors="coerce"
+    )
 
-    return df
+    # 날짜 변환 실패 행 제거
+    df = df.dropna(subset=["날짜"])
+
+    # 기온 숫자 변환
+    df["최고기온(℃)"] = pd.to_numeric(
+        df["최고기온(℃)"],
+        errors="coerce"
+    )
+
+    df["최저기온(℃)"] = pd.to_numeric(
+        df["최저기온(℃)"],
+        errors="coerce"
+    )
+
+    df = df.dropna(
+        subset=["최고기온(℃)", "최저기온(℃)"]
+    )
+
+    return df.sort_values("날짜")
+
 
 df = load_data()
 
-# 날짜 선택
 st.sidebar.header("📅 날짜 선택")
 
 start_date = st.sidebar.date_input(
     "시작 날짜",
-    value=df["날짜"].min().date(),
-    min_value=df["날짜"].min().date(),
-    max_value=df["날짜"].max().date()
+    value=df["날짜"].min().date()
 )
 
 end_date = st.sidebar.date_input(
     "종료 날짜",
-    value=df["날짜"].max().date(),
-    min_value=df["날짜"].min().date(),
-    max_value=df["날짜"].max().date()
+    value=df["날짜"].max().date()
 )
 
-# 데이터 필터링
 filtered_df = df[
     (df["날짜"] >= pd.to_datetime(start_date))
     & (df["날짜"] <= pd.to_datetime(end_date))
 ]
 
-st.subheader("📈 최고기온 · 최저기온 변화")
+st.subheader("📈 최고기온 · 최저기온 그래프")
 
-# 그래프 생성
 fig = go.Figure()
 
-# 최고기온 (핫핑크)
+# 최고기온
 fig.add_trace(
     go.Scatter(
         x=filtered_df["날짜"],
         y=filtered_df["최고기온(℃)"],
         mode="lines",
         name="최고기온",
-        line=dict(color="hotpink", width=3)
+        line=dict(
+            color="hotpink",
+            width=3
+        )
     )
 )
 
-# 최저기온 (연한 하늘색)
+# 최저기온
 fig.add_trace(
     go.Scatter(
         x=filtered_df["날짜"],
         y=filtered_df["최저기온(℃)"],
         mode="lines",
         name="최저기온",
-        line=dict(color="lightskyblue", width=3)
+        line=dict(
+            color="lightskyblue",
+            width=3
+        )
     )
 )
 
 fig.update_layout(
-    title="서울 기온 변화",
+    title="서울 최고기온 · 최저기온 변화",
     xaxis_title="날짜",
     yaxis_title="기온(℃)",
     hovermode="x unified",
     legend_title="범례",
-    height=650
+    height=700
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(
+    fig,
+    use_container_width=True
+)
 
-# 통계
 st.subheader("📊 선택 구간 통계")
 
 col1, col2 = st.columns(2)
@@ -108,8 +130,8 @@ with col2:
         f"{filtered_df['최저기온(℃)'].min():.1f}℃"
     )
 
-# 데이터 표시
-with st.expander("원본 데이터 보기"):
-    st.dataframe(filtered_df, use_container_width=True)
-
-st.caption("데이터 출처: seoul.csv")
+with st.expander("데이터 보기"):
+    st.dataframe(
+        filtered_df,
+        use_container_width=True
+    )
