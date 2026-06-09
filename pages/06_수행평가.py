@@ -3,35 +3,30 @@ import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 
-# -------------------------------
-# 페이지 설정
-# -------------------------------
 st.set_page_config(
-    page_title="국가별 교통사고 분석",
-    page_icon="🚗",
+    page_title="연령별 인구 분석",
+    page_icon="👨‍👩‍👧‍👦",
     layout="wide"
 )
 
-st.title("🚗 국가별 교통사고 분석")
+st.title("👨‍👩‍👧‍👦 연령별 인구 분석")
 
-# -------------------------------
+# ------------------
 # CSV 자동 찾기
-# -------------------------------
+# ------------------
 root = Path(__file__).parent.parent
 
 csv_files = list(root.glob("*.csv"))
 
-if len(csv_files) == 0:
-    st.error("상위 폴더에 CSV 파일이 없습니다.")
+if not csv_files:
+    st.error("CSV 파일이 없습니다.")
     st.stop()
 
 csv_path = csv_files[0]
 
-st.caption(f"불러온 파일 : {csv_path.name}")
-
-# -------------------------------
+# ------------------
 # CSV 읽기
-# -------------------------------
+# ------------------
 encodings = [
     "utf-8",
     "utf-8-sig",
@@ -49,123 +44,105 @@ for enc in encodings:
         pass
 
 if df is None:
-    st.error("CSV 파일을 읽을 수 없습니다.")
+    st.error("파일을 읽을 수 없습니다.")
     st.stop()
 
-# -------------------------------
-# 컬럼 찾기
-# -------------------------------
-country_col = None
-death_col = None
+# ------------------
+# 숫자형 변환
+# ------------------
+age_cols = [
+    "09세",
+    "1019세",
+    "2029세",
+    "3039세",
+    "4049세",
+    "5059세",
+    "6069세",
+    "7079세",
+    "8089세",
+    "9099세",
+    "100세 이상"
+]
 
-for col in df.columns:
-
-    col_str = str(col)
-
-    if "국가" in col_str:
-        country_col = col
-
-    if (
-        "사망" in col_str
-        and "10만" not in col_str
-        and "1만" not in col_str
-    ):
-        death_col = col
-
-if country_col is None or death_col is None:
-    st.error(
-        f"""
-필수 컬럼을 찾을 수 없습니다.
-
-현재 컬럼:
-{list(df.columns)}
-"""
+for col in age_cols:
+    df[col] = (
+        df[col]
+        .astype(str)
+        .str.replace(",", "")
+        .astype(float)
     )
-    st.stop()
 
-# -------------------------------
-# 비율 계산
-# -------------------------------
-total = df[death_col].sum()
-
-df["교통사고 비율"] = (
-    df[death_col] / total * 100
-).round(2)
-
-df = df.sort_values(
-    "교통사고 비율",
-    ascending=False
-).reset_index(drop=True)
-
-# -------------------------------
-# 국가 선택
-# -------------------------------
-country = st.selectbox(
-    "🌏 국가 선택",
-    df[country_col]
+# ------------------
+# 행정구역 선택
+# ------------------
+region = st.selectbox(
+    "📍 행정구역 선택",
+    df["행정구역"]
 )
 
-selected_row = df[
-    df[country_col] == country
-].iloc[0]
+selected = df[df["행정구역"] == region].iloc[0]
 
-# -------------------------------
+# ------------------
+# 데이터 생성
+# ------------------
+chart_df = pd.DataFrame({
+    "연령대": age_cols,
+    "인구수": [selected[col] for col in age_cols]
+})
+
+total = chart_df["인구수"].sum()
+
+chart_df["비율"] = (
+    chart_df["인구수"] / total * 100
+).round(2)
+
+# ------------------
 # 색상
-# -------------------------------
+# ------------------
+max_idx = chart_df["인구수"].idxmax()
+
 colors = []
 
-for i in range(len(df)):
+for i in range(len(chart_df)):
 
-    if i == 0:
+    if i == max_idx:
         colors.append("#ff0000")
 
     else:
+        opacity = 1 - i * 0.07
 
-        opacity = max(
-            0.25,
-            1 - i * 0.03
-        )
+        if opacity < 0.3:
+            opacity = 0.3
 
         colors.append(
-            f"rgba(255,80,80,{opacity})"
+            f"rgba(0,120,255,{opacity})"
         )
 
-# 선택 국가 파랑 강조
-selected_idx = df.index[
-    df[country_col] == country
-][0]
-
-colors[selected_idx] = "#0066ff"
-
-# -------------------------------
-# Plotly 그래프
-# -------------------------------
+# ------------------
+# 그래프
+# ------------------
 fig = go.Figure()
 
 fig.add_trace(
     go.Bar(
-        y=df[country_col],
-        x=df["교통사고 비율"],
-        orientation="h",
+        x=chart_df["연령대"],
+        y=chart_df["비율"],
         marker_color=colors,
-        text=df["교통사고 비율"].astype(str) + "%",
+        text=chart_df["비율"].astype(str) + "%",
         textposition="outside",
         hovertemplate=
-        "<b>%{y}</b><br>"
-        "비율: %{x:.2f}%"
-        "<extra></extra>"
+        "<b>%{x}</b><br>" +
+        "비율: %{y:.2f}%<extra></extra>"
     )
 )
 
 fig.update_layout(
-    title="국가별 교통사고 사망 비율",
+    title=f"{region} 연령대별 인구 비율",
     template="plotly_white",
-    height=900,
-    showlegend=False
-)
-
-fig.update_yaxes(
-    categoryorder="total ascending"
+    height=600,
+    showlegend=False,
+    yaxis_title="비율 (%)",
+    xaxis_title="연령대"
 )
 
 st.plotly_chart(
@@ -173,38 +150,39 @@ st.plotly_chart(
     use_container_width=True
 )
 
-# -------------------------------
-# 선택 국가 정보
-# -------------------------------
+# ------------------
+# 통계
+# ------------------
 st.markdown("---")
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.metric(
-        "교통사고 비율",
-        f"{selected_row['교통사고 비율']:.2f}%"
+        "총 인구수",
+        f"{int(total):,}명"
     )
 
 with col2:
-    rank = selected_idx + 1
+    top_age = chart_df.loc[
+        chart_df["인구수"].idxmax(),
+        "연령대"
+    ]
 
     st.metric(
-        "순위",
-        f"{rank}위"
+        "가장 많은 연령대",
+        top_age
     )
 
-# -------------------------------
-# TOP10
-# -------------------------------
+# ------------------
+# 표
+# ------------------
 st.markdown("---")
 
-st.subheader("🏆 TOP 10 국가")
+st.subheader("📊 상세 데이터")
 
 st.dataframe(
-    df[
-        [country_col, "교통사고 비율"]
-    ].head(10),
+    chart_df,
     use_container_width=True,
     hide_index=True
 )
