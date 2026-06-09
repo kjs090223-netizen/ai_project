@@ -3,9 +3,9 @@ import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 
-# ----------------------------------
+# -------------------------------
 # 페이지 설정
-# ----------------------------------
+# -------------------------------
 st.set_page_config(
     page_title="국가별 교통사고 분석",
     page_icon="🚗",
@@ -13,78 +13,133 @@ st.set_page_config(
 )
 
 st.title("🚗 국가별 교통사고 분석")
-st.markdown("---")
 
-# ----------------------------------
-# CSV 불러오기
-# pages 폴더 안에 코드
-# csv는 상위 폴더
-# ----------------------------------
-csv_path = Path(__file__).parent.parent / "kim.csv"
+# -------------------------------
+# CSV 자동 찾기
+# -------------------------------
+root = Path(__file__).parent.parent
 
-try:
-    df = pd.read_csv(csv_path)
-except:
-    df = pd.read_csv(csv_path, encoding="cp949")
+csv_files = list(root.glob("*.csv"))
 
-# ----------------------------------
-# 컬럼 자동 찾기
-# ----------------------------------
-country_col = [c for c in df.columns if "국가" in c][0]
-death_col = [c for c in df.columns if "사망" in c and "10만" not in c][0]
+if len(csv_files) == 0:
+    st.error("상위 폴더에 CSV 파일이 없습니다.")
+    st.stop()
 
-# ----------------------------------
+csv_path = csv_files[0]
+
+st.caption(f"불러온 파일 : {csv_path.name}")
+
+# -------------------------------
+# CSV 읽기
+# -------------------------------
+encodings = [
+    "utf-8",
+    "utf-8-sig",
+    "cp949",
+    "euc-kr"
+]
+
+df = None
+
+for enc in encodings:
+    try:
+        df = pd.read_csv(csv_path, encoding=enc)
+        break
+    except:
+        pass
+
+if df is None:
+    st.error("CSV 파일을 읽을 수 없습니다.")
+    st.stop()
+
+# -------------------------------
+# 컬럼 찾기
+# -------------------------------
+country_col = None
+death_col = None
+
+for col in df.columns:
+
+    col_str = str(col)
+
+    if "국가" in col_str:
+        country_col = col
+
+    if (
+        "사망" in col_str
+        and "10만" not in col_str
+        and "1만" not in col_str
+    ):
+        death_col = col
+
+if country_col is None or death_col is None:
+    st.error(
+        f"""
+필수 컬럼을 찾을 수 없습니다.
+
+현재 컬럼:
+{list(df.columns)}
+"""
+    )
+    st.stop()
+
+# -------------------------------
 # 비율 계산
-# ----------------------------------
-total_death = df[death_col].sum()
+# -------------------------------
+total = df[death_col].sum()
 
 df["교통사고 비율"] = (
-    df[death_col] / total_death * 100
+    df[death_col] / total * 100
 ).round(2)
 
-# 내림차순 정렬
 df = df.sort_values(
     "교통사고 비율",
     ascending=False
 ).reset_index(drop=True)
 
-# ----------------------------------
+# -------------------------------
 # 국가 선택
-# ----------------------------------
+# -------------------------------
 country = st.selectbox(
-    "🌎 국가를 선택하세요",
+    "🌏 국가 선택",
     df[country_col]
 )
 
-selected = df[df[country_col] == country]
+selected_row = df[
+    df[country_col] == country
+].iloc[0]
 
-st.metric(
-    "선택 국가 교통사고 비율",
-    f"{selected['교통사고 비율'].iloc[0]:.2f}%"
-)
-
-# ----------------------------------
-# 그래프용 색상
-# ----------------------------------
+# -------------------------------
+# 색상
+# -------------------------------
 colors = []
 
 for i in range(len(df)):
+
     if i == 0:
-        colors.append("#ff0000")  # 1위 빨강
+        colors.append("#ff0000")
+
     else:
-        opacity = max(0.25, 1 - (i * 0.03))
-        colors.append(
-            f"rgba(255,100,100,{opacity})"
+
+        opacity = max(
+            0.25,
+            1 - i * 0.03
         )
 
-# 선택 국가 강조
-for idx in df.index:
-    if df.loc[idx, country_col] == country:
-        colors[idx] = "#0066ff"
+        colors.append(
+            f"rgba(255,80,80,{opacity})"
+        )
 
-# ----------------------------------
+# 선택 국가 파랑 강조
+selected_idx = df.index[
+    df[country_col] == country
+][0]
+
+colors[selected_idx] = "#0066ff"
+
+# -------------------------------
 # Plotly 그래프
-# ----------------------------------
+# -------------------------------
 fig = go.Figure()
 
 fig.add_trace(
@@ -97,26 +152,16 @@ fig.add_trace(
         textposition="outside",
         hovertemplate=
         "<b>%{y}</b><br>"
-        "교통사고 비율: %{x:.2f}%<extra></extra>"
+        "비율: %{x:.2f}%"
+        "<extra></extra>"
     )
 )
 
 fig.update_layout(
-    height=900,
+    title="국가별 교통사고 사망 비율",
     template="plotly_white",
-    title={
-        "text":"국가별 교통사고 비율 순위",
-        "x":0.5
-    },
-    xaxis_title="교통사고 비율 (%)",
-    yaxis_title="국가",
-    showlegend=False,
-    margin=dict(
-        l=20,
-        r=20,
-        t=70,
-        b=20
-    )
+    height=900,
+    showlegend=False
 )
 
 fig.update_yaxes(
@@ -128,43 +173,38 @@ st.plotly_chart(
     use_container_width=True
 )
 
-# ----------------------------------
-# 선택 국가 상세 정보
-# ----------------------------------
+# -------------------------------
+# 선택 국가 정보
+# -------------------------------
 st.markdown("---")
-st.subheader(f"📊 {country} 상세 정보")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.write(
-        f"**사망자 수:** "
-        f"{int(selected[death_col].iloc[0]):,}명"
+    st.metric(
+        "교통사고 비율",
+        f"{selected_row['교통사고 비율']:.2f}%"
     )
 
 with col2:
-    rank = (
-        df.index[
-            df[country_col] == country
-        ][0] + 1
+    rank = selected_idx + 1
+
+    st.metric(
+        "순위",
+        f"{rank}위"
     )
 
-    st.write(
-        f"**비율 순위:** {rank}위"
-    )
-
-# ----------------------------------
+# -------------------------------
 # TOP10
-# ----------------------------------
+# -------------------------------
 st.markdown("---")
-st.subheader("🏆 교통사고 비율 TOP 10")
 
-top10 = df.head(10)[
-    [country_col, "교통사고 비율"]
-]
+st.subheader("🏆 TOP 10 국가")
 
 st.dataframe(
-    top10,
+    df[
+        [country_col, "교통사고 비율"]
+    ].head(10),
     use_container_width=True,
     hide_index=True
 )
